@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#12233f">
+  <title>TutorLink UC | Peer learning, made simpler</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17243b;
+      --muted: #64748b;
+      --line: #dce4ef;
+      --paper: #fff;
+      --canvas: #f3f6fb;
+      --blue: #2857c5;
+      --blue-dark: #193d91;
+      --green: #18794e;
+      --red: #b42318;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--canvas); color: var(--ink); }
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+    .site-header { background: #12233f; color: white; padding: 1.1rem max(1.25rem, calc((100% - 1120px) / 2)); }
+    .brand { display: flex; align-items: center; gap: .75rem; }
+    .brand-mark { display: grid; width: 2.5rem; height: 2.5rem; place-items: center; border-radius: .8rem; background: #c6f4df; color: #12233f; font-weight: 900; }
+    .brand h1 { margin: 0; font-size: 1.2rem; }
+    .brand p { margin: .15rem 0 0; color: #cbd6e7; font-size: .82rem; }
+    main { width: min(1120px, calc(100% - 2rem)); margin: 2rem auto 4rem; }
+    .hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1rem; align-items: end; margin-bottom: 1.5rem; }
+    .eyebrow { color: var(--blue); font-size: .76rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+    h2 { margin: .35rem 0 .45rem; font-size: clamp(1.5rem, 3vw, 2rem); }
+    h3 { margin: 0 0 1rem; font-size: 1.12rem; }
+    p { line-height: 1.55; }
+    .muted, .helper { color: var(--muted); }
+    .muted { margin: 0; }
+    .layout { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; align-items: start; }
+    .card { padding: 1.35rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--paper); box-shadow: 0 10px 24px rgba(27, 47, 78, .045); }
+    .card + .card { margin-top: 1rem; }
+    .layout > .card + .card { margin-top: 0; }
+    .full { grid-column: 1 / -1; }
+    .fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .85rem; }
+    .field { min-width: 0; }
+    .field.wide { grid-column: 1 / -1; }
+    label { display: block; margin-bottom: .35rem; color: #34445e; font-size: .88rem; font-weight: 700; }
+    input, select, textarea {
+      width: 100%; min-height: 2.7rem; padding: .65rem .75rem; border: 1px solid #cbd5e1;
+      border-radius: .55rem; background: white; color: var(--ink);
+    }
+    textarea { min-height: 5rem; resize: vertical; }
+    input:focus, select:focus, textarea:focus { outline: 3px solid rgba(40, 87, 197, .15); border-color: var(--blue); }
+    .helper { margin: .35rem 0 0; font-size: .78rem; }
+    .button-row { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: 1rem; }
+    .button { min-height: 2.55rem; padding: .6rem .9rem; border: 0; border-radius: .55rem; background: var(--blue); color: white; font-weight: 750; }
+    .button:hover { background: var(--blue-dark); }
+    .button.secondary { border: 1px solid var(--line); background: white; color: var(--ink); }
+    .button.secondary:hover { background: #f1f5f9; }
+    .button.danger { background: #fff1f0; color: var(--red); }
+    .button.success { background: #e7f6ed; color: var(--green); }
+    .button.small { min-height: 2rem; padding: .4rem .65rem; font-size: .82rem; }
+    .button:disabled { cursor: wait; opacity: .65; }
+    .notice { margin: 0 0 1rem; padding: .8rem 1rem; border: 1px solid #a9c5ff; border-radius: .65rem; background: #eff5ff; color: #163d85; }
+    .notice[data-kind="error"] { border-color: #f3b4ae; background: #fff1f0; color: var(--red); }
+    .notice[data-kind="success"] { border-color: #a7dfbd; background: #effaf3; color: var(--green); }
+    .hidden { display: none !important; }
+    .account-bar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .75rem; align-items: center; margin-bottom: 1rem; }
+    .account-bar p { margin: 0; font-weight: 700; }
+    .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .75rem; margin-bottom: 1rem; }
+    .stat { padding: 1rem 1.1rem; border: 1px solid var(--line); border-radius: .85rem; background: #fff; box-shadow: 0 10px 24px rgba(27, 47, 78, .035); }
+    .stat .num { display: block; font-size: 1.9rem; font-weight: 800; line-height: 1.1; }
+    .stat .label { color: var(--muted); font-size: .8rem; font-weight: 700; }
+    .tutor-list, .session-list { display: grid; gap: .75rem; }
+    .tutor-item, .session-item { padding: 1rem; border: 1px solid var(--line); border-radius: .75rem; background: #fff; }
+    .tutor-item h4, .session-item h4 { margin: 0 0 .35rem; }
+    .tutor-item p, .session-item p { margin: .25rem 0; }
+    .chips { display: flex; flex-wrap: wrap; gap: .4rem; margin: .5rem 0; }
+    .chip { padding: .3rem .65rem; border: 1px solid #d3def0; border-radius: 999px; background: #edf2fb; color: #34445e; font-size: .78rem; font-weight: 750; }
+    button.chip:hover { background: #dbe7fb; }
+    .rating-line { font-weight: 700; color: #7a4d00; }
+    .tag { display: inline-flex; padding: .22rem .5rem; border-radius: 999px; background: #edf2fb; color: #34445e; font-size: .75rem; font-weight: 750; }
+    .status-tag { background: #fff4d6; color: #7a4d00; }
+    .status-tag.accepted, .status-tag.completed { background: #e7f6ed; color: var(--green); }
+    .status-tag.declined, .status-tag.cancelled { background: #f1f3f6; color: #5b6677; }
+    .session-heading { display: flex; justify-content: space-between; gap: .75rem; align-items: flex-start; }
+    .inline-form { display: grid; grid-template-columns: 90px minmax(0, 1fr) auto; gap: .5rem; align-items: end; margin-top: .8rem; }
+    .inline-form .field { margin: 0; }
+    .empty-state { padding: 1.25rem; border: 1px dashed #cbd5e1; border-radius: .7rem; color: var(--muted); text-align: center; }
+    footer { padding: 1rem; color: var(--muted); font-size: .8rem; text-align: center; }
+    @media (max-width: 720px) {
+      main { margin-top: 1.25rem; }
+      .hero { grid-template-columns: 1fr; }
+      .layout { grid-template-columns: 1fr; }
+      .full { grid-column: auto; }
+    }
+    @media (max-width: 480px) {
+      .fields { grid-template-columns: 1fr; }
+      .field.wide { grid-column: auto; }
+      .inline-form { grid-template-columns: 1fr; }
+      .card { padding: 1rem; }
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">T</div>
+      <div>
+        <h1>TutorLink UC</h1>
+        <p>Campus peer tutoring</p>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div>
+        <div class="eyebrow">Learn together</div>
+        <h2 id="heroTitle">Find a tutor. Make progress.</h2>
+        <p id="heroText" class="muted">Book one-to-one help with an active peer tutor and keep every session in one place.</p>
+      </div>
+      <div id="apiNotice" class="notice hidden" role="status" aria-live="polite"></div>
+    </section>
+
+    <section id="authSection" class="layout" aria-label="Account access">
+      <section class="card">
+        <h3>Create an account</h3>
+        <form id="registerForm">
+          <div class="fields">
+            <div class="field">
+              <label for="registerRole">Account type</label>
+              <select id="registerRole" name="role">
+                <option value="learner">Learner</option>
+                <option value="tutor">Tutor</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="registerStudentNo">Student number</label>
+              <input id="registerStudentNo" name="student_no" autocomplete="off" minlength="5" maxlength="20" pattern="[0-9-]{5,20}" title="Use 5 to 20 digits and dashes" required>
+            </div>
+            <div class="field">
+              <label for="registerName">Full name</label>
+              <input id="registerName" name="full_name" autocomplete="name" minlength="2" maxlength="100" required>
+            </div>
+            <div class="field">
+              <label for="registerEmail">Email</label>
+              <input id="registerEmail" name="email" type="email" autocomplete="email" maxlength="255" required>
+            </div>
+            <div class="field">
+              <label for="registerPassword">Password</label>
+              <input id="registerPassword" name="password" type="password" autocomplete="new-password" minlength="8" maxlength="72" required>
+            </div>
+            <div class="field">
+              <label for="registerProgram">Program</label>
+              <input id="registerProgram" name="program" maxlength="120" required>
+            </div>
+            <div class="field">
+              <label for="registerYear">Year level</label>
+              <select id="registerYear" name="year_level" required>
+                <option value="">Select year</option>
+                <option value="1">Year 1</option><option value="2">Year 2</option>
+                <option value="3">Year 3</option><option value="4">Year 4</option>
+                <option value="5">Year 5</option><option value="6">Year 6</option>
+              </select>
+            </div>
+            <div id="tutorFields" class="field wide hidden">
+              <label for="registerSubjects">Subjects you teach</label>
+              <select id="registerSubjects" multiple size="4"></select>
+              <p class="helper">Select one or more subjects. Hold Ctrl (Windows/Linux) or Command (Mac) to choose more.</p>
+              <div class="fields" style="margin-top:.8rem">
+                <div class="field">
+                  <label for="registerDailyLimit">Daily session limit</label>
+                  <select id="registerDailyLimit" name="max_daily_sessions">
+                    <option value="1">1 session</option><option value="2">2 sessions</option>
+                    <option value="3" selected>3 sessions</option><option value="4">4 sessions</option>
+                    <option value="5">5 sessions</option><option value="6">6 sessions</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="registerBio">Tutor bio</label>
+                  <textarea id="registerBio" name="bio" maxlength="500"></textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="button-row"><button class="button" type="submit">Create account</button></div>
+        </form>
+      </section>
+
+      <section class="card">
+        <h3>Welcome back</h3>
+        <form id="loginForm">
+          <div class="field">
+            <label for="loginEmail">Email</label>
+            <input id="loginEmail" name="email" type="email" autocomplete="email" required>
+          </div>
+          <div class="field" style="margin-top:.85rem">
+            <label for="loginPassword">Password</label>
+            <input id="loginPassword" name="password" type="password" autocomplete="current-password" required>
+          </div>
+          <div class="button-row"><button class="button" type="submit">Log in</button></div>
+        </form>
+      </section>
+    </section>
+
+    <section id="dashboard" class="hidden">
+      <div class="account-bar card">
+        <p id="welcomeText"></p>
+        <button id="logoutButton" class="button secondary small" type="button">Log out</button>
+      </div>
+
+      <div id="summaryCards" class="summary" aria-label="Session summary"></div>
+
+      <div class="layout">
+        <section id="requestsSection" class="card full hidden">
+          <h3>Pending requests</h3>
+          <div id="requestList" class="session-list"><div class="empty-state">Loading requests…</div></div>
+        </section>
+
+        <section id="directorySection" class="card">
+          <h3>Find a tutor</h3>
+          <div class="fields">
+            <div class="field wide">
+              <label for="tutorSearch">Search by name</label>
+              <input id="tutorSearch" type="search" maxlength="100" placeholder="e.g. Juan">
+            </div>
+            <div class="field">
+              <label for="subjectFilter">Filter by subject</label>
+              <select id="subjectFilter"><option value="">All subjects</option></select>
+            </div>
+            <div class="field">
+              <label for="tutorSort">Sort by</label>
+              <select id="tutorSort">
+                <option value="rating">Rating (high to low)</option>
+                <option value="name">Name (A to Z)</option>
+              </select>
+            </div>
+          </div>
+          <div id="tutorList" class="tutor-list" style="margin-top:1rem"></div>
+        </section>
+
+        <section id="bookingSection" class="card">
+          <h3 id="bookingTitle">Request a session</h3>
+          <form id="bookingForm">
+            <div id="bookingTutorField" class="field">
+              <label for="tutorChoice">Tutor and subject</label>
+              <select id="tutorChoice" required>
+                <option value="">Choose a tutor from the list</option>
+              </select>
+            </div>
+            <div class="fields" style="margin-top:.85rem">
+              <div class="field wide">
+                <label for="bookingTopic">What would you like help with?</label>
+                <input id="bookingTopic" maxlength="200" required>
+              </div>
+              <div class="field">
+                <label for="bookingDate">Date</label>
+                <input id="bookingDate" type="date" required>
+              </div>
+              <div class="field">
+                <label for="bookingVenue">Venue</label>
+                <input id="bookingVenue" maxlength="160" placeholder="Library, room, or online" required>
+              </div>
+              <div class="field">
+                <label for="bookingStart">Start time</label>
+                <input id="bookingStart" type="time" required>
+              </div>
+              <div class="field">
+                <label for="bookingEnd">End time</label>
+                <input id="bookingEnd" type="time" required>
+              </div>
+            </div>
+            <div class="button-row">
+              <button id="bookingSubmit" class="button" type="submit">Send request</button>
+              <button id="cancelEditButton" class="button secondary hidden" type="button">Stop editing</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="card full">
+          <h3 id="sessionsTitle">My tutoring sessions</h3>
+          <div id="sessionList" class="session-list"><div class="empty-state">Loading your sessions…</div></div>
+        </section>
+      </div>
+    </section>
+  </main>
+  <footer>TutorLink UC · DBSYS32 Phase 2</footer>
+
+  <script>
+    const state = { user: null, subjects: [], tutors: [], sessions: [], editingId: null };
+    const notice = document.getElementById('apiNotice');
+    const tutorFields = document.getElementById('tutorFields');
+    const bookingForm = document.getElementById('bookingForm');
+
+    function showNotice(message, kind = 'info') {
+      notice.textContent = message;
+      notice.dataset.kind = kind;
+      notice.classList.remove('hidden');
+    }
+
+    function clearNotice() {
+      notice.textContent = '';
+      notice.classList.add('hidden');
+      delete notice.dataset.kind;
+    }
+
+    async function api(url, options = {}) {
+      const response = await fetch(url, {
+        credentials: 'same-origin',
+        ...options,
+        headers: {
+          ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+          ...options.headers,
+        },
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || `Request failed (${response.status})`);
+      return data;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+      })[character]);
+    }
+
+    function updateRoleFields() {
+      const isTutor = document.getElementById('registerRole').value === 'tutor';
+      tutorFields.classList.toggle('hidden', !isTutor);
+      const tutorControls = [
+        document.getElementById('registerSubjects'),
+        document.getElementById('registerDailyLimit'),
+        document.getElementById('registerBio'),
+      ];
+      for (const control of tutorControls) {
+        control.disabled = !isTutor;
+      }
+      document.getElementById('registerSubjects').required = isTutor;
+    }
+
+    updateRoleFields();
+
+    document.getElementById('registerSubjects').addEventListener('invalid', () => {
+      showNotice('Subjects you teach: choose at least one subject.', 'error');
+    });
+
+    async function loadSubjects() {
+      state.subjects = await api('/api/subjects');
+      const subjectOptions = state.subjects.map((subject) =>
+        `<option value="${subject.subject_id}">${escapeHtml(subject.subject_code)} — ${escapeHtml(subject.subject_title)}</option>`
+      ).join('');
+      document.getElementById('registerSubjects').innerHTML = subjectOptions;
+      document.getElementById('subjectFilter').insertAdjacentHTML('beforeend', subjectOptions);
+    }
+
+    function pluralSessions(count) {
+      const number = Number(count);
+      return `${number} session${number === 1 ? '' : 's'}`;
+    }
+
+    async function loadTutors() {
+      const subjectId = document.getElementById('subjectFilter').value;
+      const params = new URLSearchParams();
+      if (subjectId) params.set('subject_id', subjectId);
+      const search = document.getElementById('tutorSearch').value.trim();
+      if (search) params.set('q', search);
+      params.set('sort', document.getElementById('tutorSort').value);
+      state.tutors = await api(`/api/tutors?${params.toString()}`);
+
+      const tutorList = document.getElementById('tutorList');
+      const tutorChoice = document.getElementById('tutorChoice');
+      const previousChoice = tutorChoice.value;
+      const options = ['<option value="">Choose a tutor from the list</option>'];
+
+      // When a subject filter is active, only that subject is offered for booking.
+      const visibleSubjects = (tutor) => subjectId
+        ? tutor.subjects.filter((subject) => String(subject.subject_id) === String(subjectId))
+        : tutor.subjects;
+
+      for (const tutor of state.tutors) {
+        for (const subject of visibleSubjects(tutor)) {
+          options.push(
+            `<option value="${tutor.tutor_id}:${subject.subject_id}">${escapeHtml(tutor.full_name)} — ${escapeHtml(subject.subject_code)} (${escapeHtml(subject.subject_title)})</option>`
+          );
+        }
+      }
+      tutorChoice.innerHTML = options.join('');
+      if (previousChoice && tutorChoice.querySelector(`option[value="${previousChoice}"]`)) {
+        tutorChoice.value = previousChoice;
+      }
+
+      if (!state.tutors.length) {
+        tutorList.innerHTML = '<div class="empty-state">No active tutors match your search.</div>';
+        return;
+      }
+
+      tutorList.innerHTML = state.tutors.map((tutor) => {
+        const rating = tutor.avg_rating === null
+          ? '<p class="muted">No ratings yet</p>'
+          : `<p class="rating-line">★ ${escapeHtml(Number(tutor.avg_rating).toFixed(1))} <span class="muted">(${escapeHtml(tutor.rating_count)} rating${Number(tutor.rating_count) === 1 ? '' : 's'})</span></p>`;
+        const subjectButtons = visibleSubjects(tutor).map((subject) =>
+          `<button class="chip" type="button" title="Request a session in this subject" data-book-tutor="${tutor.tutor_id}" data-book-subject="${subject.subject_id}">${escapeHtml(subject.subject_code)}</button>`
+        ).join('');
+        return `
+        <article class="tutor-item">
+          <h4>${escapeHtml(tutor.full_name)}</h4>
+          <p class="muted">${escapeHtml(tutor.program)} · Year ${escapeHtml(tutor.year_level)}</p>
+          ${rating}
+          <div class="chips">${subjectButtons}</div>
+          ${tutor.bio ? `<p>${escapeHtml(tutor.bio)}</p>` : ''}
+          <p class="helper">Up to ${escapeHtml(pluralSessions(tutor.max_daily_sessions))} per day · Click a subject to request a session</p>
+        </article>`;
+      }).join('');
+    }
+
+    function displayDate(value) {
+      const date = new Date(`${String(value).slice(0, 10)}T00:00:00`);
+      return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString();
+    }
+
+    function sessionActions(session) {
+      const id = Number(session.session_id);
+      const actions = [];
+      if (state.user.role === 'learner' && session.status === 'Pending') {
+        actions.push(`<button class="button secondary small" data-action="edit" data-id="${id}">Edit request</button>`);
+        actions.push(`<button class="button danger small" data-action="cancel" data-id="${id}">Cancel</button>`);
+      } else if (state.user.role === 'tutor' && session.status === 'Pending') {
+        actions.push(`<button class="button success small" data-action="accept" data-id="${id}">Accept</button>`);
+        actions.push(`<button class="button secondary small" data-action="decline" data-id="${id}">Decline</button>`);
+        actions.push(`<button class="button danger small" data-action="cancel" data-id="${id}">Cancel</button>`);
+      } else if (session.status === 'Accepted') {
+        if (state.user.role === 'tutor') {
+          actions.push(`<button class="button success small" data-action="complete" data-id="${id}">Mark completed</button>`);
+        }
+        actions.push(`<button class="button danger small" data-action="cancel" data-id="${id}">Cancel</button>`);
+      }
+      return actions.length ? `<div class="button-row">${actions.join('')}</div>` : '';
+    }
+
+    function renderSessionItems(container, sessions, emptyText) {
+      if (!sessions.length) {
+        container.innerHTML = `<div class="empty-state">${escapeHtml(emptyText)}</div>`;
+        return;
+      }
+      container.innerHTML = sessions.map((session) => {
+        const otherPerson = state.user.role === 'learner'
+          ? `Tutor: ${escapeHtml(session.tutor_name)}`
+          : `Learner: ${escapeHtml(session.learner_name)}`;
+        const rating = session.rating === null
+          ? ''
+          : `<p><strong>Rating:</strong> ${escapeHtml(session.rating)} / 5${session.feedback ? ` · ${escapeHtml(session.feedback)}` : ''}</p>`;
+        const reviewForm = state.user.role === 'learner' && session.status === 'Completed' && session.rating === null
+          ? `<form class="inline-form rating-form" data-id="${Number(session.session_id)}">
+               <div class="field"><label>Rating</label><select name="rating" required><option value="">Choose</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></div>
+               <div class="field"><label>Feedback (optional)</label><input name="feedback" maxlength="2000"></div>
+               <button class="button small" type="submit">Submit rating</button>
+             </form>` : '';
+        return `<article class="session-item">
+          <div class="session-heading">
+            <div>
+              <h4>${escapeHtml(session.subject_code)} · ${escapeHtml(session.subject_title)}</h4>
+              <p>${otherPerson}</p>
+            </div>
+            <span class="tag status-tag ${escapeHtml(session.status.toLowerCase())}">${escapeHtml(session.status)}</span>
+          </div>
+          <p><strong>${escapeHtml(session.topic)}</strong></p>
+          <p>${escapeHtml(displayDate(session.session_date))} · ${escapeHtml(String(session.start_time).slice(0, 5))}–${escapeHtml(String(session.end_time).slice(0, 5))} · ${escapeHtml(session.venue)}</p>
+          ${rating}${reviewForm}${sessionActions(session)}
+        </article>`;
+      }).join('');
+    }
+
+    function renderSessions() {
+      renderSessionItems(
+        document.getElementById('sessionList'),
+        state.sessions,
+        'No tutoring sessions yet.'
+      );
+      if (state.user?.role === 'tutor') {
+        renderSessionItems(
+          document.getElementById('requestList'),
+          state.sessions.filter((session) => session.status === 'Pending'),
+          'No pending requests right now.'
+        );
+      }
+    }
+
+    function renderSummary() {
+      const box = document.getElementById('summaryCards');
+      if (!state.user) {
+        box.innerHTML = '';
+        return;
+      }
+      const today = localDateInput(new Date());
+      const dateKey = (session) => String(session.session_date).slice(0, 10);
+      const isActive = (session) => session.status === 'Pending' || session.status === 'Accepted';
+      const count = (test) => state.sessions.filter(test).length;
+      const cards = state.user.role === 'tutor'
+        ? [
+            ['Pending requests', count((s) => s.status === 'Pending')],
+            ["Today's appointments", count((s) => isActive(s) && dateKey(s) === today)],
+            ['Accepted sessions', count((s) => s.status === 'Accepted')],
+            ['Completed', count((s) => s.status === 'Completed')],
+          ]
+        : [
+            ['Upcoming sessions', count((s) => isActive(s) && dateKey(s) >= today)],
+            ['Pending', count((s) => s.status === 'Pending')],
+            ['Accepted', count((s) => s.status === 'Accepted')],
+            ['Completed', count((s) => s.status === 'Completed')],
+            ['Declined or cancelled', count((s) => s.status === 'Declined' || s.status === 'Cancelled')],
+          ];
+      box.innerHTML = cards.map(([label, number]) =>
+        `<div class="stat"><span class="num">${number}</span><span class="label">${escapeHtml(label)}</span></div>`
+      ).join('');
+    }
+
+    async function loadSessions() {
+      state.sessions = await api('/api/sessions');
+      renderSessions();
+      renderSummary();
+    }
+
+    function setLoggedIn(user) {
+      state.user = user;
+      document.getElementById('authSection').classList.toggle('hidden', Boolean(user));
+      document.getElementById('dashboard').classList.toggle('hidden', !user);
+      if (!user) {
+        document.getElementById('summaryCards').innerHTML = '';
+        return;
+      }
+      const isLearner = user.role === 'learner';
+      document.getElementById('welcomeText').textContent = `Hello, ${user.name} · ${user.role}`;
+      document.getElementById('heroTitle').textContent = isLearner
+        ? 'Find a tutor. Make progress.'
+        : 'Your tutoring dashboard';
+      document.getElementById('heroText').textContent = isLearner
+        ? 'Book one-to-one help with an active peer tutor and keep every session in one place.'
+        : 'Review requests, accept or decline them, and mark sessions completed.';
+      document.getElementById('directorySection').classList.toggle('hidden', !isLearner);
+      document.getElementById('bookingSection').classList.toggle('hidden', !isLearner);
+      document.getElementById('requestsSection').classList.toggle('hidden', isLearner);
+      document.getElementById('sessionsTitle').textContent = isLearner ? 'My tutoring sessions' : 'All my sessions';
+      if (isLearner) {
+        loadTutors().catch((error) => showNotice(error.message, 'error'));
+      }
+      loadSessions().catch((error) => showNotice(error.message, 'error'));
+    }
+
+    function localDateInput(dateValue) {
+      const date = new Date(dateValue);
+      const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+      return local.toISOString().slice(0, 10);
+    }
+
+    function startEditing(session) {
+      state.editingId = Number(session.session_id);
+      document.getElementById('bookingTitle').textContent = 'Edit pending request';
+      document.getElementById('bookingTutorField').classList.add('hidden');
+      document.getElementById('bookingTopic').value = session.topic;
+      document.getElementById('bookingDate').value = localDateInput(`${String(session.session_date).slice(0, 10)}T00:00:00`);
+      document.getElementById('bookingStart').value = String(session.start_time).slice(0, 5);
+      document.getElementById('bookingEnd').value = String(session.end_time).slice(0, 5);
+      document.getElementById('bookingVenue').value = session.venue;
+      document.getElementById('bookingSubmit').textContent = 'Save changes';
+      document.getElementById('cancelEditButton').classList.remove('hidden');
+      document.getElementById('bookingSection').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function stopEditing() {
+      state.editingId = null;
+      bookingForm.reset();
+      document.getElementById('bookingTitle').textContent = 'Request a session';
+      document.getElementById('bookingTutorField').classList.remove('hidden');
+      document.getElementById('bookingSubmit').textContent = 'Send request';
+      document.getElementById('cancelEditButton').classList.add('hidden');
+    }
+
+    document.getElementById('registerRole').addEventListener('change', updateRoleFields);
+
+    const reloadTutors = () => loadTutors().catch((error) => showNotice(error.message, 'error'));
+    let searchTimer = null;
+    document.getElementById('subjectFilter').addEventListener('change', reloadTutors);
+    document.getElementById('tutorSort').addEventListener('change', reloadTutors);
+    document.getElementById('tutorSearch').addEventListener('input', () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(reloadTutors, 300);
+    });
+
+    document.getElementById('registerForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      clearNotice();
+      const form = event.currentTarget;
+      const formData = new FormData(form);
+      const payload = Object.fromEntries(formData.entries());
+      if (payload.role === 'tutor') {
+        payload.subject_ids = [...document.getElementById('registerSubjects').selectedOptions]
+          .map((option) => Number(option.value));
+      }
+      try {
+        await api('/api/register', { method: 'POST', body: JSON.stringify(payload) });
+        const session = await api('/api/session');
+        form.reset();
+        updateRoleFields();
+        showNotice('Account created successfully', 'success');
+        setLoggedIn(session.user);
+      } catch (error) {
+        showNotice(error.message, 'error');
+      }
+    });
+
+    document.getElementById('loginForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      clearNotice();
+      const form = event.currentTarget;
+      const payload = Object.fromEntries(new FormData(form).entries());
+      try {
+        const result = await api('/api/login', { method: 'POST', body: JSON.stringify(payload) });
+        form.reset();
+        showNotice(result.message, 'success');
+        setLoggedIn(result.user);
+      } catch (error) {
+        showNotice(error.message, 'error');
+      }
+    });
+
+    document.getElementById('logoutButton').addEventListener('click', async () => {
+      try {
+        const result = await api('/api/logout', { method: 'POST' });
+        state.sessions = [];
+        state.user = null;
+        stopEditing();
+        setLoggedIn(null);
+        showNotice(result.message, 'success');
+      } catch (error) {
+        showNotice(error.message, 'error');
+      }
+    });
+
+    document.getElementById('tutorList').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-book-tutor]');
+      if (!button) return;
+      document.getElementById('tutorChoice').value = `${button.dataset.bookTutor}:${button.dataset.bookSubject}`;
+      document.getElementById('bookingSection').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+
+    bookingForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      clearNotice();
+      const [tutorId, subjectId] = (document.getElementById('tutorChoice').value || '').split(':');
+      const payload = {
+        topic: document.getElementById('bookingTopic').value,
+        session_date: document.getElementById('bookingDate').value,
+        start_time: document.getElementById('bookingStart').value,
+        end_time: document.getElementById('bookingEnd').value,
+        venue: document.getElementById('bookingVenue').value,
+      };
+      if (!state.editingId) {
+        payload.tutor_id = tutorId;
+        payload.subject_id = subjectId;
+      }
+      try {
+        const url = state.editingId ? `/api/sessions/${state.editingId}` : '/api/sessions';
+        const result = await api(url, {
+          method: state.editingId ? 'PUT' : 'POST',
+          body: JSON.stringify(payload),
+        });
+        stopEditing();
+        showNotice(result.message, 'success');
+        await loadSessions();
+      } catch (error) {
+        showNotice(error.message, 'error');
+      }
+    });
+
+    document.getElementById('cancelEditButton').addEventListener('click', stopEditing);
+    document.getElementById('bookingDate').min = localDateInput(new Date());
+
+    // The same handlers serve "All my sessions" and, for tutors, "Pending requests".
+    async function handleSessionClick(event) {
+      const button = event.target.closest('[data-action]');
+      if (!button) return;
+      const session = state.sessions.find((item) => Number(item.session_id) === Number(button.dataset.id));
+      if (!session) return;
+      if (button.dataset.action === 'edit') {
+        startEditing(session);
+        return;
+      }
+      const status = { accept: 'Accepted', decline: 'Declined', complete: 'Completed', cancel: 'Cancelled' }[button.dataset.action];
+      if (!status) return;
+      try {
+        const result = await api(`/api/sessions/${button.dataset.id}/status`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status }),
+        });
+        showNotice(result.message, 'success');
+        await loadSessions();
+      } catch (error) {
+        showNotice(error.message, 'error');
+      }
+    }
+
+    async function handleSessionSubmit(event) {
+      if (!event.target.matches('.rating-form')) return;
+      event.preventDefault();
+      const values = Object.fromEntries(new FormData(event.target).entries());
+      try {
+        const result = await api(`/api/sessions/${event.target.dataset.id}/rating`, {
+          method: 'POST',
+          body: JSON.stringify(values),
+        });
+        showNotice(result.message, 'success');
+        await loadSessions();
+      } catch (error) {
+        showNotice(error.message, 'error');
+      }
+    }
+
+    for (const containerId of ['sessionList', 'requestList']) {
+      const container = document.getElementById(containerId);
+      container.addEventListener('click', handleSessionClick);
+      container.addEventListener('submit', handleSessionSubmit);
+    }
+
+    async function initialize() {
+      try {
+        await loadSubjects();
+        updateRoleFields();
+        const session = await api('/api/session');
+        if (session.loggedIn) setLoggedIn(session.user);
+      } catch (error) {
+        showNotice(error.message, 'error');
+      }
+    }
+
+    initialize();
+  </script>
+</body>
+</html>
