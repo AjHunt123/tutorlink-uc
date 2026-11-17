@@ -80,6 +80,18 @@
     .chip { padding: .3rem .65rem; border: 1px solid #d3def0; border-radius: 999px; background: #edf2fb; color: #34445e; font-size: .78rem; font-weight: 750; }
     button.chip:hover { background: #dbe7fb; }
     .rating-line { font-weight: 700; color: #7a4d00; }
+    .chip.removable { display: inline-flex; align-items: center; gap: .35rem; }
+    .chip-remove { display: inline-grid; width: 1.25rem; height: 1.25rem; place-items: center; padding: 0; border: 0; border-radius: 50%; background: #fff1f0; color: var(--red); font-weight: 800; line-height: 1; }
+    .chip-remove:hover { background: #fcd9d5; }
+    .filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; margin-bottom: 1rem; }
+    .detail-head { display: flex; justify-content: space-between; gap: .75rem; align-items: center; margin-bottom: .75rem; }
+    .detail-head h4 { margin: 0; font-size: 1.05rem; }
+    .detail-grid { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: .45rem .9rem; margin: 0; }
+    .detail-grid dt { color: var(--muted); font-size: .85rem; font-weight: 700; }
+    .detail-grid dd { margin: 0; }
+    @media (max-width: 720px) { .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 480px) { .filters { grid-template-columns: 1fr; } .detail-grid { grid-template-columns: 1fr; } }
+    .subject-add { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .5rem; align-items: end; margin-top: .75rem; }
     .tag { display: inline-flex; padding: .22rem .5rem; border-radius: 999px; background: #edf2fb; color: #34445e; font-size: .75rem; font-weight: 750; }
     .status-tag { background: #fff4d6; color: #7a4d00; }
     .status-tag.accepted, .status-tag.completed { background: #e7f6ed; color: var(--green); }
@@ -219,6 +231,39 @@
           <div id="requestList" class="session-list"><div class="empty-state">Loading requests…</div></div>
         </section>
 
+        <section id="profileSection" class="card full hidden">
+          <h3>My profile</h3>
+          <div class="layout">
+            <form id="profileForm">
+              <div class="field">
+                <label for="profileLimit">Maximum sessions per day</label>
+                <select id="profileLimit">
+                  <option value="1">1 session</option><option value="2">2 sessions</option>
+                  <option value="3">3 sessions</option><option value="4">4 sessions</option>
+                  <option value="5">5 sessions</option><option value="6">6 sessions</option>
+                </select>
+              </div>
+              <div class="field" style="margin-top:.85rem">
+                <label for="profileBio">Bio</label>
+                <textarea id="profileBio" maxlength="500"></textarea>
+              </div>
+              <div class="button-row"><button class="button" type="submit">Save profile</button></div>
+            </form>
+            <div>
+              <label>Subjects you teach</label>
+              <div id="profileSubjects" class="chips"></div>
+              <form id="addSubjectForm" class="subject-add">
+                <div class="field">
+                  <label for="addSubjectChoice">Add a subject</label>
+                  <select id="addSubjectChoice" required><option value="">Choose a subject</option></select>
+                </div>
+                <button class="button secondary" type="submit">Add</button>
+              </form>
+              <p class="helper">You must teach at least one subject. A subject with Pending or Accepted sessions cannot be removed.</p>
+            </div>
+          </div>
+        </section>
+
         <section id="directorySection" class="card">
           <h3>Find a tutor</h3>
           <div class="fields">
@@ -279,8 +324,45 @@
           </form>
         </section>
 
+        <section id="detailSection" class="card full hidden" aria-live="polite">
+          <div class="detail-head">
+            <h3 style="margin:0">Session details</h3>
+            <button id="closeDetailButton" class="button secondary small" type="button">Close</button>
+          </div>
+          <div id="detailBody"></div>
+        </section>
+
         <section class="card full">
           <h3 id="sessionsTitle">My tutoring sessions</h3>
+          <div class="filters">
+            <div class="field">
+              <label for="filterStatus">Status</label>
+              <select id="filterStatus">
+                <option value="">All statuses</option>
+                <option>Pending</option><option>Accepted</option><option>Completed</option>
+                <option>Declined</option><option>Cancelled</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="filterFrom">From date</label>
+              <input id="filterFrom" type="date">
+            </div>
+            <div class="field">
+              <label for="filterTo">To date</label>
+              <input id="filterTo" type="date">
+            </div>
+            <div class="field">
+              <label for="filterSort">Sort by</label>
+              <select id="filterSort">
+                <option value="date_desc">Date (newest first)</option>
+                <option value="date_asc">Date (oldest first)</option>
+                <option value="status">Status</option>
+              </select>
+            </div>
+          </div>
+          <div class="button-row" style="margin:0 0 1rem">
+            <button id="clearFiltersButton" class="button secondary small" type="button">Clear filters</button>
+          </div>
           <div id="sessionList" class="session-list"><div class="empty-state">Loading your sessions…</div></div>
         </section>
       </div>
@@ -289,7 +371,9 @@
   <footer>TutorLink UC · DBSYS32 Phase 2</footer>
 
   <script>
-    const state = { user: null, subjects: [], tutors: [], sessions: [], editingId: null };
+    // sessions = every session of the user (counts, pending queue, button lookups);
+    // visibleSessions = the filtered list shown under "My sessions".
+    const state = { user: null, subjects: [], tutors: [], sessions: [], visibleSessions: [], profile: null, editingId: null };
     const notice = document.getElementById('apiNotice');
     const tutorFields = document.getElementById('tutorFields');
     const bookingForm = document.getElementById('bookingForm');
@@ -436,7 +520,44 @@
         }
         actions.push(`<button class="button danger small" data-action="cancel" data-id="${id}">Cancel</button>`);
       }
-      return actions.length ? `<div class="button-row">${actions.join('')}</div>` : '';
+      actions.push(`<button class="button secondary small" data-action="details" data-id="${id}">View details</button>`);
+      return `<div class="button-row">${actions.join('')}</div>`;
+    }
+
+    function displayDateTime(value) {
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? String(value ?? '') : date.toLocaleString();
+    }
+
+    async function showDetails(sessionId) {
+      const session = await api(`/api/sessions/${encodeURIComponent(sessionId)}`);
+      const rows = [
+        ['Learner', session.learner_name],
+        ['Tutor', session.tutor_name],
+        ['Subject', `${session.subject_code} · ${session.subject_title}`],
+        ['Topic', session.topic],
+        ['Date', displayDate(session.session_date)],
+        ['Time', `${String(session.start_time).slice(0, 5)}–${String(session.end_time).slice(0, 5)}`],
+        ['Venue', session.venue],
+        ['Requested', displayDateTime(session.requested_at)],
+      ];
+      if (session.completed_at) rows.push(['Completed', displayDateTime(session.completed_at)]);
+      rows.push(['Rating', session.rating === null
+        ? 'Not rated yet'
+        : `${session.rating} / 5${session.feedback ? ` · ${session.feedback}` : ''}`]);
+
+      document.getElementById('detailBody').innerHTML = `
+        <div class="detail-head">
+          <h4>Session #${Number(session.session_id)}</h4>
+          <span class="tag status-tag ${escapeHtml(session.status.toLowerCase())}">${escapeHtml(session.status)}</span>
+        </div>
+        <dl class="detail-grid">
+          ${rows.map(([label, value]) => `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`).join('')}
+          <dt>Status history</dt><dd class="muted">The audit trail of every status change is added in Phase 3.</dd>
+        </dl>`;
+      const panel = document.getElementById('detailSection');
+      panel.classList.remove('hidden');
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     function renderSessionItems(container, sessions, emptyText) {
@@ -475,8 +596,8 @@
     function renderSessions() {
       renderSessionItems(
         document.getElementById('sessionList'),
-        state.sessions,
-        'No tutoring sessions yet.'
+        state.visibleSessions,
+        filtersActive() ? 'No sessions match these filters.' : 'No tutoring sessions yet.'
       );
       if (state.user?.role === 'tutor') {
         renderSessionItems(
@@ -516,10 +637,60 @@
       ).join('');
     }
 
+    function sessionFilterParams() {
+      const params = new URLSearchParams();
+      const status = document.getElementById('filterStatus').value;
+      const from = document.getElementById('filterFrom').value;
+      const to = document.getElementById('filterTo').value;
+      if (status) params.set('status', status);
+      if (from) params.set('from', from);
+      if (to) params.set('to', to);
+      params.set('sort', document.getElementById('filterSort').value);
+      return params;
+    }
+
+    function filtersActive() {
+      return Boolean(
+        document.getElementById('filterStatus').value
+        || document.getElementById('filterFrom').value
+        || document.getElementById('filterTo').value
+      );
+    }
+
     async function loadSessions() {
+      // The unfiltered list feeds the counts and the pending queue; the filter
+      // and sort are applied in SQL by the server for the list below them.
       state.sessions = await api('/api/sessions');
+      state.visibleSessions = await api(`/api/sessions?${sessionFilterParams().toString()}`);
       renderSessions();
       renderSummary();
+    }
+
+    // Tutor profile (FR-03): bio, daily limit, add and remove subjects.
+    function renderProfile() {
+      const { profile, subjects } = state.profile;
+      document.getElementById('profileLimit').value = String(profile.max_daily_sessions);
+      document.getElementById('profileBio').value = profile.bio || '';
+
+      const chips = document.getElementById('profileSubjects');
+      chips.innerHTML = subjects.map((subject) =>
+        `<span class="chip removable">${escapeHtml(subject.subject_code)}
+           <button class="chip-remove" type="button" title="Remove ${escapeHtml(subject.subject_code)}" aria-label="Remove ${escapeHtml(subject.subject_code)}" data-remove-subject="${Number(subject.subject_id)}">×</button>
+         </span>`
+      ).join('');
+
+      const taught = new Set(subjects.map((subject) => Number(subject.subject_id)));
+      const available = state.subjects.filter((subject) => !taught.has(Number(subject.subject_id)));
+      document.getElementById('addSubjectChoice').innerHTML =
+        '<option value="">Choose a subject</option>' +
+        available.map((subject) =>
+          `<option value="${subject.subject_id}">${escapeHtml(subject.subject_code)} — ${escapeHtml(subject.subject_title)}</option>`
+        ).join('');
+    }
+
+    async function loadProfile() {
+      state.profile = await api('/api/tutor/profile');
+      renderProfile();
     }
 
     function setLoggedIn(user) {
@@ -528,6 +699,12 @@
       document.getElementById('dashboard').classList.toggle('hidden', !user);
       if (!user) {
         document.getElementById('summaryCards').innerHTML = '';
+        document.getElementById('detailSection').classList.add('hidden');
+        document.getElementById('filterStatus').value = '';
+        document.getElementById('filterFrom').value = '';
+        document.getElementById('filterTo').value = '';
+        document.getElementById('filterSort').value = 'date_desc';
+        state.visibleSessions = [];
         return;
       }
       const isLearner = user.role === 'learner';
@@ -541,9 +718,12 @@
       document.getElementById('directorySection').classList.toggle('hidden', !isLearner);
       document.getElementById('bookingSection').classList.toggle('hidden', !isLearner);
       document.getElementById('requestsSection').classList.toggle('hidden', isLearner);
+      document.getElementById('profileSection').classList.toggle('hidden', isLearner);
       document.getElementById('sessionsTitle').textContent = isLearner ? 'My tutoring sessions' : 'All my sessions';
       if (isLearner) {
         loadTutors().catch((error) => showNotice(error.message, 'error'));
+      } else {
+        loadProfile().catch((error) => showNotice(error.message, 'error'));
       }
       loadSessions().catch((error) => showNotice(error.message, 'error'));
     }
@@ -687,6 +867,15 @@
         startEditing(session);
         return;
       }
+      if (button.dataset.action === 'details') {
+        clearNotice();
+        try {
+          await showDetails(button.dataset.id);
+        } catch (error) {
+          showNotice(error.message, 'error');
+        }
+        return;
+      }
       const status = { accept: 'Accepted', decline: 'Declined', complete: 'Completed', cancel: 'Cancelled' }[button.dataset.action];
       if (!status) return;
       try {
@@ -716,6 +905,71 @@
         showNotice(error.message, 'error');
       }
     }
+
+    document.getElementById('profileForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      clearNotice();
+      try {
+        const result = await api('/api/tutor/profile', {
+          method: 'PUT',
+          body: JSON.stringify({
+            bio: document.getElementById('profileBio').value,
+            max_daily_sessions: Number(document.getElementById('profileLimit').value),
+          }),
+        });
+        showNotice(result.message, 'success');
+        await loadProfile();
+      } catch (error) {
+        showNotice(error.message, 'error');
+      }
+    });
+
+    document.getElementById('addSubjectForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      clearNotice();
+      const subjectId = Number(document.getElementById('addSubjectChoice').value);
+      if (!subjectId) return;
+      try {
+        const result = await api('/api/tutor/subjects', {
+          method: 'POST',
+          body: JSON.stringify({ subject_id: subjectId }),
+        });
+        showNotice(result.message, 'success');
+        await loadProfile();
+      } catch (error) {
+        showNotice(error.message, 'error');
+      }
+    });
+
+    document.getElementById('profileSubjects').addEventListener('click', async (event) => {
+      const button = event.target.closest('[data-remove-subject]');
+      if (!button) return;
+      clearNotice();
+      try {
+        const result = await api(`/api/tutor/subjects/${encodeURIComponent(button.dataset.removeSubject)}`, {
+          method: 'DELETE',
+        });
+        showNotice(result.message, 'success');
+        await loadProfile();
+      } catch (error) {
+        showNotice(error.message, 'error');
+      }
+    });
+
+    const reloadSessions = () => loadSessions().catch((error) => showNotice(error.message, 'error'));
+    for (const filterId of ['filterStatus', 'filterFrom', 'filterTo', 'filterSort']) {
+      document.getElementById(filterId).addEventListener('change', reloadSessions);
+    }
+    document.getElementById('clearFiltersButton').addEventListener('click', () => {
+      document.getElementById('filterStatus').value = '';
+      document.getElementById('filterFrom').value = '';
+      document.getElementById('filterTo').value = '';
+      document.getElementById('filterSort').value = 'date_desc';
+      reloadSessions();
+    });
+    document.getElementById('closeDetailButton').addEventListener('click', () => {
+      document.getElementById('detailSection').classList.add('hidden');
+    });
 
     for (const containerId of ['sessionList', 'requestList']) {
       const container = document.getElementById(containerId);
