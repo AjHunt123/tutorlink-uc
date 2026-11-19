@@ -75,7 +75,7 @@ async function startServer() {
     throw new Error('SESSION_SECRET must be set in the environment');
   }
 
-  await initializeDatabase();
+  if (process.env.INIT_SCHEMA === "true") await initializeDatabase();
   app.listen(PORT, () => console.log(`TutorLink UC running on port ${PORT}`));
 }
 
