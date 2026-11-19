@@ -1,0 +1,67 @@
+mysql: [Warning] Using a password on the command line interface can be insecure.
++------------------------------------------+
+| test                                     |
++------------------------------------------+
+| TC-DB-01 duplicate subject_code (UNIQUE) |
++------------------------------------------+
+ERROR 1062 (23000) at line 2: Duplicate entry 'DBSYS32' for key 'Subject.subject_code'
++-----------------------------------+
+| test                              |
++-----------------------------------+
+| TC-DB-02 duplicate email (UNIQUE) |
++-----------------------------------+
+ERROR 1062 (23000) at line 5: Duplicate entry 'ana.lim@tutorlink.test' for key 'Learner.email'
++-----------------------------------+
+| test                              |
++-----------------------------------+
+| TC-DB-03 year_level 9 (CHECK 1-6) |
++-----------------------------------+
+ERROR 3819 (HY000) at line 9: Check constraint 'chk_learner_year_level' is violated.
++-------------------------------------------+
+| test                                      |
++-------------------------------------------+
+| TC-DB-04 max_daily_sessions 9 (CHECK 1-6) |
++-------------------------------------------+
+ERROR 3819 (HY000) at line 13: Check constraint 'chk_tutor_daily_limit' is violated.
++---------------------------------------------+
+| test                                        |
++---------------------------------------------+
+| TC-DB-05 end_time before start_time (CHECK) |
++---------------------------------------------+
+ERROR 3819 (HY000) at line 17: Check constraint 'chk_tutoring_session_time' is violated.
++-------------------------------+
+| test                          |
++-------------------------------+
+| TC-DB-06 rating 6 (CHECK 1-5) |
++-------------------------------+
+ERROR 3819 (HY000) at line 21: Check constraint 'chk_tutoring_session_rating' is violated.
++--------------------------------+
+| test                           |
++--------------------------------+
+| TC-DB-07 invalid status (ENUM) |
++--------------------------------+
+ERROR 1265 (01000) at line 25: Data truncated for column 'status' at row 1
++-------------------------------------------------------+
+| test                                                  |
++-------------------------------------------------------+
+| TC-DB-08 session for a tutor that does not exist (FK) |
++-------------------------------------------------------+
+ERROR 1452 (23000) at line 29: Cannot add or update a child row: a foreign key constraint fails (`tutorlink_uc`.`TutoringSession`, CONSTRAINT `fk_tutoring_session_tutor` FOREIGN KEY (`tutor_id`) REFERENCES `Tutor` (`tutor_id`) ON DELETE RESTRICT)
++---------------------------------------------------------+
+| test                                                    |
++---------------------------------------------------------+
+| TC-DB-09 delete a tutor that has sessions (FK RESTRICT) |
++---------------------------------------------------------+
+ERROR 1451 (23000) at line 33: Cannot delete or update a parent row: a foreign key constraint fails (`tutorlink_uc`.`TutoringSession`, CONSTRAINT `fk_tutoring_session_tutor` FOREIGN KEY (`tutor_id`) REFERENCES `Tutor` (`tutor_id`) ON DELETE RESTRICT)
++--------------------------------------------------------+
+| test                                                   |
++--------------------------------------------------------+
+| TC-DB-10 delete a subject that is in use (FK RESTRICT) |
++--------------------------------------------------------+
+ERROR 1451 (23000) at line 36: Cannot delete or update a parent row: a foreign key constraint fails (`tutorlink_uc`.`TutoringSession`, CONSTRAINT `fk_tutoring_session_subject` FOREIGN KEY (`subject_id`) REFERENCES `Subject` (`subject_id`) ON DELETE RESTRICT)
++----------------------------------------------------------+
+| test                                                     |
++----------------------------------------------------------+
+| TC-DB-11 same subject twice for one tutor (composite PK) |
++----------------------------------------------------------+
+ERROR 1062 (23000) at line 39: Duplicate entry '1-1' for key 'TutorSubject.PRIMARY'
