@@ -855,6 +855,8 @@
       state.editingId = Number(session.session_id);
       document.getElementById('bookingTitle').textContent = 'Edit pending request';
       document.getElementById('bookingTutorField').classList.add('hidden');
+      document.getElementById('tutorChoice').required = false;
+      document.getElementById('tutorChoice').required = false;
       document.getElementById('bookingTopic').value = session.topic;
       document.getElementById('bookingDate').value = localDateInput(`${String(session.session_date).slice(0, 10)}T00:00:00`);
       document.getElementById('bookingStart').value = String(session.start_time).slice(0, 5);
@@ -871,6 +873,8 @@
       bookingForm.reset();
       document.getElementById('bookingTitle').textContent = 'Request a session';
       document.getElementById('bookingTutorField').classList.remove('hidden');
+      document.getElementById('tutorChoice').required = true;
+      document.getElementById('tutorChoice').required = true;
       document.getElementById('bookingSubmit').textContent = 'Send request';
       document.getElementById('cancelEditButton').classList.add('hidden');
       updateBookingLoad();
