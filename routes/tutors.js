@@ -1,5 +1,6 @@
 const express = require('express');
 const pool = require('../config/db');
+const { sendDbError } = require('../utils/dbCalls');
 
 const router = express.Router();
 
@@ -29,6 +30,12 @@ router.get('/tutors', async (req, res) => {
     return res.status(400).json({ message: 'Choose a valid subject' });
   }
 
+  // Daily load (Phase 3): "appointments / daily limit" for one date, default today.
+  const loadDate = req.query.date ? String(req.query.date) : null;
+  if (loadDate !== null && !isValidDate(loadDate)) {
+    return res.status(400).json({ message: 'Dates must use the YYYY-MM-DD format' });
+  }
+
   const search = String(req.query.q || '').trim().slice(0, 100);
   const sortKey = Object.prototype.hasOwnProperty.call(ORDER_BY, req.query.sort)
     ? req.query.sort
@@ -42,7 +49,9 @@ router.get('/tutors', async (req, res) => {
                 'subject_code', sb.subject_code,
                 'subject_title', sb.subject_title
               )) AS subjects,
-              r.avg_rating, r.rating_count
+              r.avg_rating, r.rating_count,
+              DATE_FORMAT(COALESCE(?, CURDATE()), '%Y-%m-%d') AS load_date,
+              fn_tutor_appointment_count(t.tutor_id, COALESCE(?, CURDATE())) AS day_load
          FROM Tutor t
          JOIN TutorSubject ts ON ts.tutor_id = t.tutor_id
          JOIN Subject sb ON sb.subject_id = ts.subject_id
@@ -58,7 +67,7 @@ router.get('/tutors', async (req, res) => {
         GROUP BY t.tutor_id, t.full_name, t.program, t.year_level, t.bio, t.max_daily_sessions,
                  r.avg_rating, r.rating_count
         ORDER BY ${ORDER_BY[sortKey]}`,
-      [search, subjectId, subjectId]
+      [loadDate, loadDate, search, subjectId, subjectId]
     );
 
     const tutors = rows.map((row) => {
@@ -69,12 +78,45 @@ router.get('/tutors', async (req, res) => {
         subjects,
         avg_rating: row.avg_rating === null ? null : Number(row.avg_rating),
         rating_count: Number(row.rating_count || 0),
+        day_load: Number(row.day_load),
+        is_full: Number(row.day_load) >= Number(row.max_daily_sessions),
       };
     });
     return res.json(tutors);
   } catch (error) {
-    console.error('List tutors failed:', error);
-    return res.status(500).json({ message: 'Could not load tutors' });
+    return sendDbError(res, error, 'Could not load tutors', 'List tutors');
+  }
+});
+
+function isValidDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+// One tutor's load on one date, shown on the Request Session form
+// ("1 / 3", FULL). The count comes from fn_tutor_appointment_count.
+router.get('/tutors/:tutorId/load', async (req, res) => {
+  const tutorId = Number(req.params.tutorId);
+  const date = String(req.query.date || '');
+  if (!Number.isInteger(tutorId) || tutorId < 1) {
+    return res.status(400).json({ message: 'Choose a valid tutor' });
+  }
+  if (!isValidDate(date)) {
+    return res.status(400).json({ message: 'Dates must use the YYYY-MM-DD format' });
+  }
+  try {
+    const [rows] = await pool.execute(
+      `SELECT max_daily_sessions, fn_tutor_appointment_count(tutor_id, ?) AS appointment_count
+         FROM Tutor WHERE tutor_id = ? AND status = 'Active'`,
+      [date, tutorId]
+    );
+    if (!rows.length) return res.status(404).json({ message: 'Tutor not found' });
+    const count = Number(rows[0].appointment_count);
+    const max = Number(rows[0].max_daily_sessions);
+    return res.json({ tutor_id: tutorId, date, appointment_count: count, max_daily_sessions: max, full: count >= max });
+  } catch (error) {
+    return sendDbError(res, error, 'Could not load the tutor schedule', 'Tutor load');
   }
 });
 
@@ -96,6 +138,28 @@ function requireTutor(req, res, next) {
   req.tutorId = tutorId;
   return next();
 }
+
+// Tutor dashboard (FR-02): pending requests and today's appointment count.
+router.get('/tutor/dashboard', requireTutor, async (req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT t.max_daily_sessions,
+              fn_tutor_appointment_count(t.tutor_id, CURDATE()) AS today_count,
+              (SELECT COUNT(*) FROM TutoringSession s
+                WHERE s.tutor_id = t.tutor_id AND s.status = 'Pending') AS pending_requests
+         FROM Tutor t WHERE t.tutor_id = ?`,
+      [req.tutorId]
+    );
+    if (!rows.length) return res.status(404).json({ message: 'Tutor account not found' });
+    return res.json({
+      max_daily_sessions: Number(rows[0].max_daily_sessions),
+      today_count: Number(rows[0].today_count),
+      pending_requests: Number(rows[0].pending_requests),
+    });
+  } catch (error) {
+    return sendDbError(res, error, 'Could not load your dashboard', 'Tutor dashboard');
+  }
+});
 
 router.get('/tutor/profile', requireTutor, async (req, res) => {
   try {

@@ -1,0 +1,62 @@
+◇ injected env (0) from .env
+◇ injected env (0) from .env
+TutorLink UC running on port 3100
+[CALL] sp_request_session(5, 5, 5, 'Edit me', '2027-01-14', '09:00:00', '10:00:00', 'UC Banilad Library', @new_session_id)
+[CALL] sp_update_session_status(16, 'learner', 5, 'Cancelled', 'Clean up after the test')
+[CALL] sp_request_session(1, 1, 1, 'Normalization review', '2026-12-25', '09:00:00', '10:00:00', 'UC Banilad Library', @new_session_id)
+[CALL] sp_update_session_status(17, 'tutor', 1, 'Accepted', 'See you at the library.')
+[CALL] sp_request_session(1, 3, 4, 'Evidence test', '2026-11-24', '09:00:00', '10:00:00', 'UC Banilad Library', @new_session_id)
+[RULE] sp_request_session: Session must be scheduled in the future and last 30 to 120 minutes.
+[CALL] sp_request_session(1, 3, 4, 'Evidence test', '2026-12-27', '09:00:00', '09:20:00', 'UC Banilad Library', @new_session_id)
+[RULE] sp_request_session: Session must be scheduled in the future and last 30 to 120 minutes.
+[CALL] sp_request_session(1, 3, 4, 'Evidence test', '2026-12-27', '09:00:00', '11:30:00', 'UC Banilad Library', @new_session_id)
+[RULE] sp_request_session: Session must be scheduled in the future and last 30 to 120 minutes.
+[CALL] sp_request_session(1, 3, 4, 'Evidence test', '2026-12-27', '10:00:00', '09:00:00', 'UC Banilad Library', @new_session_id)
+[RULE] sp_request_session: Session must be scheduled in the future and last 30 to 120 minutes.
+[CALL] sp_request_session(1, 3, 1, 'Evidence test', '2026-12-27', '09:00:00', '10:00:00', 'UC Banilad Library', @new_session_id)
+[RULE] sp_request_session: The selected tutor does not teach this subject.
+[CALL] sp_request_session(8, 2, 6, 'Evidence test', '2026-12-28', '09:00:00', '10:00:00', 'UC Banilad Library', @new_session_id)
+[RULE] sp_request_session: You cannot book a tutoring session with yourself.
+[CALL] sp_request_session(1, 3, 4, 'Subnetting', '2026-12-27', '13:00:00', '14:00:00', 'UC Banilad Library', @new_session_id)
+[CALL] sp_request_session(2, 3, 4, 'Evidence test', '2026-12-27', '13:30:00', '14:30:00', 'UC Banilad Library', @new_session_id)
+[RULE] sp_request_session: Tutor already has a session from 13:00 to 14:00 that overlaps this time.
+[CALL] sp_request_session(1, 2, 6, 'Evidence test', '2026-12-27', '13:30:00', '14:30:00', 'UC Banilad Library', @new_session_id)
+[RULE] sp_request_session: You already have a session from 13:00 to 14:00 that overlaps this time.
+[CALL] sp_request_session(2, 3, 4, 'Evidence test', '2026-12-27', '14:00:00', '15:00:00', 'UC Banilad Library', @new_session_id)
+[CALL] sp_request_session(1, 4, 8, 'Evidence test', '2026-12-26', '09:00:00', '10:00:00', 'UC Banilad Library', @new_session_id)
+[CALL] sp_request_session(2, 4, 8, 'Evidence test', '2026-12-26', '10:30:00', '11:30:00', 'UC Banilad Library', @new_session_id)
+[CALL] sp_request_session(3, 4, 8, 'Evidence test', '2026-12-26', '13:00:00', '14:00:00', 'UC Banilad Library', @new_session_id)
+[RULE] sp_request_session: Tutor has reached the daily limit.
+[CALL] sp_update_session_status(17, 'tutor', 1, 'Declined', NULL)
+[RULE] sp_update_session_status: Invalid status change: Accepted to Declined is not allowed.
+[CALL] sp_update_session_status(17, 'learner', 1, 'Completed', NULL)
+[RULE] sp_update_session_status: Only the session tutor can accept, decline or complete a session.
+[CALL] sp_update_session_status(17, 'tutor', 1, 'Completed', NULL)
+[RULE] sp_update_session_status: A session can be completed only after its end time.
+[CALL] sp_update_session_status(17, 'learner', 1, 'Cancelled', NULL)
+[RULE] sp_update_session_status: Please give a reason for cancelling this session.
+[CALL] sp_update_session_status(17, 'learner', 2, 'Cancelled', 'not mine')
+[RULE] sp_update_session_status: Tutoring session not found.
+[CALL] sp_update_session_status(7, 'learner', 1, 'Cancelled', 'too late')
+[RULE] sp_update_session_status: A session can be cancelled only before its start time.
+[CALL] sp_update_session_status(7, 'tutor', 1, 'Completed', NULL)
+[CALL] sp_request_session(3, 3, 5, 'Sorting', '2026-12-29', '09:00:00', '10:00:00', 'UC Banilad Library', @new_session_id)
+[CALL] sp_update_session_status(22, 'tutor', 3, 'Declined', 'Not available that day')
+[CALL] sp_update_session_status(22, 'tutor', 3, 'Accepted', NULL)
+[RULE] sp_update_session_status: Invalid status change: Declined to Accepted is not allowed.
+[CALL] sp_request_session(3, 2, 3, 'Flexbox', '2026-12-29', '09:00:00', '10:00:00', 'UC Banilad Library', @new_session_id)
+[CALL] sp_update_session_status(23, 'learner', 3, 'Cancelled', 'Schedule conflict')
+[CALL] sp_request_session(2, 5, 5, 'Evidence test', '2026-11-25', '07:51:00', '08:51:00', 'UC Banilad Library', @new_session_id)
+[RULE] sp_request_session: Session must be scheduled in the future and last 30 to 120 minutes.
+[CALL] sp_request_session(1, 5, 5, 'Race A', '2027-01-04', '09:00:00', '10:00:00', 'UC Banilad Library', @new_session_id)
+[CALL] sp_request_session(2, 5, 5, 'Race B', '2027-01-04', '09:00:00', '10:00:00', 'UC Banilad Library', @new_session_id)
+[CALL] sp_request_session(3, 5, 5, 'Race C', '2027-01-04', '09:30:00', '10:30:00', 'UC Banilad Library', @new_session_id)
+[RULE] sp_request_session: Tutor already has a session from 09:00 to 10:00 that overlaps this time.
+[RULE] sp_request_session: Tutor already has a session from 09:00 to 10:00 that overlaps this time.
+[CALL] sp_request_session(1, 3, 4, 'Evidence test', '2027-01-05', '08:00:00', '09:00:00', 'UC Banilad Library', @new_session_id)
+[CALL] sp_request_session(2, 3, 4, 'Evidence test', '2027-01-05', '09:30:00', '10:30:00', 'UC Banilad Library', @new_session_id)
+[CALL] sp_request_session(3, 3, 4, 'Evidence test', '2027-01-05', '11:00:00', '12:00:00', 'UC Banilad Library', @new_session_id)
+[CALL] sp_request_session(4, 3, 4, 'Evidence test', '2027-01-05', '13:00:00', '14:00:00', 'UC Banilad Library', @new_session_id)
+[CALL] sp_request_session(5, 3, 4, 'Evidence test', '2027-01-05', '15:00:00', '16:00:00', 'UC Banilad Library', @new_session_id)
+[RULE] sp_request_session: Tutor has reached the daily limit.
+[RULE] sp_request_session: Tutor has reached the daily limit.

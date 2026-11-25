@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('../config/db');
-const { validateBookingInput, statusTransitionError } = require('../utils/sessionRules');
+const { parseBookingFormat, validateBookingInput } = require('../utils/sessionRules');
+const { logCall, sendDbError } = require('../utils/dbCalls');
 
 const router = express.Router();
 const reservingStatuses = ['Pending', 'Accepted'];
@@ -35,18 +36,6 @@ function validDateInput(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00Z`);
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
-}
-
-// A DATE column can arrive as a Date object or as text depending on the driver
-// settings, so normalise it to YYYY-MM-DD before building a timestamp from it.
-function dateOnly(value) {
-  if (value instanceof Date) {
-    const year = value.getFullYear();
-    const month = String(value.getMonth() + 1).padStart(2, '0');
-    const day = String(value.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  }
-  return String(value).slice(0, 10);
 }
 
 async function beginTransaction() {
@@ -126,17 +115,17 @@ async function checkAvailability(connection, booking, tutorId, learnerId, maxDai
     return { error: 'That time overlaps another pending or accepted session for you or the tutor' };
   }
 
+  // BR-04 for the Edit route: the daily load comes from fn_tutor_appointment_count.
+  // When the edited session already counts on the same date, it is not counted twice.
   const [counts] = await connection.execute(
-    `SELECT COUNT(*) AS session_count
-       FROM TutoringSession
-      WHERE tutor_id = ?
-        AND session_date = ?
-        AND status IN ('Pending', 'Accepted')
-        AND session_id <> ?`,
-    [tutorId, booking.session_date, excludeId]
+    `SELECT fn_tutor_appointment_count(?, ?) AS session_count,
+            (SELECT COUNT(*) FROM TutoringSession
+              WHERE session_id = ? AND tutor_id = ? AND session_date = ?
+                AND status IN ('Pending', 'Accepted')) AS own_count`,
+    [tutorId, booking.session_date, excludeId, tutorId, booking.session_date]
   );
-  if (Number(counts[0].session_count) + 1 > maxDailySessions) {
-    return { error: 'The tutor has reached their daily session limit for that date' };
+  if (Number(counts[0].session_count) - Number(counts[0].own_count) + 1 > maxDailySessions) {
+    return { error: 'Tutor has reached the daily limit.' };
   }
   return {};
 }
@@ -190,7 +179,9 @@ router.get('/', async (req, res) => {
               TS.topic, TS.session_date, TS.start_time, TS.end_time, TS.venue,
               TS.status, TS.rating, TS.feedback, TS.requested_at, TS.completed_at,
               L.full_name AS learner_name, T.full_name AS tutor_name,
-              S.subject_code, S.subject_title
+              S.subject_code, S.subject_title,
+              T.max_daily_sessions,
+              fn_tutor_appointment_count(TS.tutor_id, TS.session_date) AS day_load
          FROM TutoringSession TS
          JOIN Learner L ON L.learner_id = TS.learner_id
          JOIN Tutor T ON T.tutor_id = TS.tutor_id
@@ -205,11 +196,12 @@ router.get('/', async (req, res) => {
     );
     return res.json(sessions);
   } catch (error) {
-    console.error('List tutoring sessions failed:', error);
-    return res.status(500).json({ message: 'Could not load tutoring sessions' });
+    return sendDbError(res, error, 'Could not load tutoring sessions', 'List tutoring sessions');
   }
 });
 
+// Request Session (FR-05, FR-06): the booking rules BR-01 to BR-04 run inside
+// sp_request_session. A rule message is shown on the form and nothing is saved.
 router.post('/', async (req, res) => {
   const user = req.session.user;
   if (user.role !== 'learner') {
@@ -221,58 +213,41 @@ router.post('/', async (req, res) => {
   if (!tutorId || !subjectId) {
     return res.status(400).json({ message: 'Choose a valid tutor and subject' });
   }
-  const booking = bookingFields(req.body, new Date());
-  if (booking.error) return res.status(400).json({ message: booking.error });
+  const topicError = textField(req.body.topic, 'Topic', 200);
+  if (topicError) return res.status(400).json({ message: topicError });
+  const venueError = textField(req.body.venue, 'Venue', 160);
+  if (venueError) return res.status(400).json({ message: venueError });
+  const format = parseBookingFormat(req.body);
+  if (format.error) return res.status(400).json({ message: format.error });
+
+  const params = [
+    user.id,
+    tutorId,
+    subjectId,
+    req.body.topic.trim(),
+    format.value.date,
+    format.value.start.value,
+    format.value.end.value,
+    req.body.venue.trim(),
+  ];
 
   let connection;
   try {
-    connection = await beginTransaction();
-    const tutorResult = await checkTutorAndSubject(connection, tutorId, user.id, subjectId);
-    if (tutorResult.error) {
-      await rollbackAndRelease(connection);
-      connection = null;
-      return res.status(400).json({ message: tutorResult.error });
-    }
-
-    const availability = await checkAvailability(
-      connection,
-      booking.value,
-      tutorId,
-      user.id,
-      tutorResult.maxDailySessions
+    connection = await pool.getConnection();
+    logCall('sp_request_session', params, '@new_session_id');
+    await connection.execute(
+      'CALL sp_request_session(?, ?, ?, ?, ?, ?, ?, ?, @new_session_id)',
+      params
     );
-    if (availability.error) {
-      await rollbackAndRelease(connection);
-      connection = null;
-      return res.status(409).json({ message: availability.error });
-    }
-
-    const [result] = await connection.execute(
-      `INSERT INTO TutoringSession
-        (learner_id, tutor_id, subject_id, topic, session_date, start_time, end_time, venue)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        user.id,
-        tutorId,
-        subjectId,
-        booking.value.topic,
-        booking.value.session_date,
-        booking.value.start_time,
-        booking.value.end_time,
-        booking.value.venue,
-      ]
-    );
-    await connection.commit();
-    connection.release();
-    connection = null;
+    const [rows] = await connection.query('SELECT @new_session_id AS session_id');
     return res.status(201).json({
       message: 'Tutoring session requested',
-      session_id: result.insertId,
+      session_id: rows[0].session_id,
     });
   } catch (error) {
-    if (connection) await rollbackAndRelease(connection);
-    console.error('Create tutoring session failed:', error);
-    return res.status(500).json({ message: 'Could not create the tutoring session' });
+    return sendDbError(res, error, 'Could not create the tutoring session', 'sp_request_session');
+  } finally {
+    if (connection) connection.release();
   }
 });
 
@@ -298,10 +273,21 @@ router.get('/:sessionId', async (req, res) => {
       [sessionId, user.role, user.id, user.role, user.id]
     );
     if (!rows.length) return res.status(404).json({ message: 'Tutoring session not found' });
-    return res.json(rows[0]);
+
+    // Audit trail (FR-12, proposal Query 4): written by the triggers, shown only
+    // to the learner or the tutor of the session.
+    const [audit] = await pool.execute(
+      `SELECT a.audit_id, a.changed_at, a.old_status, a.new_status, a.changed_by_role, a.remarks
+         FROM SessionAudit a
+         JOIN TutoringSession s ON s.session_id = a.session_id
+        WHERE a.session_id = ?
+          AND ((? = 'learner' AND s.learner_id = ?) OR (? = 'tutor' AND s.tutor_id = ?))
+        ORDER BY a.changed_at, a.audit_id`,
+      [sessionId, user.role, user.id, user.role, user.id]
+    );
+    return res.json({ ...rows[0], audit });
   } catch (error) {
-    console.error('Get tutoring session failed:', error);
-    return res.status(500).json({ message: 'Could not load the tutoring session' });
+    return sendDbError(res, error, 'Could not load the tutoring session', 'Get tutoring session');
   }
 });
 
@@ -380,11 +366,13 @@ router.put('/:sessionId', async (req, res) => {
     return res.json({ message: 'Tutoring session request updated' });
   } catch (error) {
     if (connection) await rollbackAndRelease(connection);
-    console.error('Update tutoring session failed:', error);
-    return res.status(500).json({ message: 'Could not update the tutoring session' });
+    return sendDbError(res, error, 'Could not update the tutoring session', 'Update tutoring session');
   }
 });
 
+// Accept, decline, cancel and complete (FR-07, FR-09, FR-10): BR-05 is applied by
+// sp_update_session_status and, again, by the triggers on TutoringSession, which
+// also write the SessionAudit row.
 async function changeStatus(req, res) {
   const sessionId = positiveId(req.params.sessionId);
   if (!sessionId) return res.status(400).json({ message: 'Invalid session ID' });
@@ -393,69 +381,32 @@ async function changeStatus(req, res) {
   if (!['Accepted', 'Declined', 'Completed', 'Cancelled'].includes(newStatus)) {
     return res.status(400).json({ message: 'Choose a valid session status' });
   }
+  const rawRemarks = req.body.remarks;
+  if (rawRemarks !== undefined && rawRemarks !== null && typeof rawRemarks !== 'string') {
+    return res.status(400).json({ message: 'Remarks must be text' });
+  }
+  const remarks = typeof rawRemarks === 'string' ? rawRemarks.trim() : '';
+  if (remarks.length > 500) {
+    return res.status(400).json({ message: 'Remarks must be 500 characters or fewer' });
+  }
 
+  const params = [sessionId, user.role, user.id, newStatus, remarks || null];
   let connection;
   try {
-    connection = await beginTransaction();
-    const [rows] = await connection.execute(
-      `SELECT session_id, learner_id, tutor_id, session_date, end_time, status
-         FROM TutoringSession
-        WHERE session_id = ?
-        FOR UPDATE`,
-      [sessionId]
-    );
-    if (!rows.length) {
-      await rollbackAndRelease(connection);
-      connection = null;
-      return res.status(404).json({ message: 'Tutoring session not found' });
-    }
-
-    const current = rows[0];
-    const isLearner = user.role === 'learner' && Number(user.id) === Number(current.learner_id);
-    const isTutor = user.role === 'tutor' && Number(user.id) === Number(current.tutor_id);
-    if (!isLearner && !isTutor) {
-      await rollbackAndRelease(connection);
-      connection = null;
-      return res.status(404).json({ message: 'Tutoring session not found' });
-    }
-
-    const endAt = new Date(`${dateOnly(current.session_date)}T${current.end_time}`);
-    const transitionError = statusTransitionError({
-      currentStatus: current.status,
-      newStatus,
-      isLearner,
-      isTutor,
-      endAt,
-      now: new Date(),
-    });
-    if (transitionError) {
-      await rollbackAndRelease(connection);
-      connection = null;
-      const code = transitionError.startsWith('Only the session tutor') ? 403 : 409;
-      return res.status(code).json({ message: transitionError });
-    }
-
-    await connection.execute(
-      `UPDATE TutoringSession
-          SET status = ?,
-              completed_at = CASE WHEN ? = 'Completed' THEN CURRENT_TIMESTAMP ELSE NULL END
-        WHERE session_id = ?`,
-      [newStatus, newStatus, sessionId]
-    );
-    await connection.commit();
-    connection.release();
-    connection = null;
+    connection = await pool.getConnection();
+    logCall('sp_update_session_status', params);
+    await connection.execute('CALL sp_update_session_status(?, ?, ?, ?, ?)', params);
     return res.json({ message: `Session ${newStatus.toLowerCase()}`, status: newStatus });
   } catch (error) {
-    if (connection) await rollbackAndRelease(connection);
-    console.error('Change session status failed:', error);
-    return res.status(500).json({ message: 'Could not change the session status' });
+    return sendDbError(res, error, 'Could not change the session status', 'sp_update_session_status');
+  } finally {
+    if (connection) connection.release();
   }
 }
 
 router.patch('/:sessionId/status', changeStatus);
 router.delete('/:sessionId', (req, res) => {
-  req.body = { status: 'Cancelled' };
+  req.body = { status: 'Cancelled', remarks: req.body.remarks };
   return changeStatus(req, res);
 });
 
@@ -509,8 +460,7 @@ router.post('/:sessionId/rating', async (req, res) => {
     return res.json({ message: 'Thank you for rating this session' });
   } catch (error) {
     if (connection) await rollbackAndRelease(connection);
-    console.error('Rate tutoring session failed:', error);
-    return res.status(500).json({ message: 'Could not save your rating' });
+    return sendDbError(res, error, 'Could not save your rating', 'Rate tutoring session');
   }
 });
 

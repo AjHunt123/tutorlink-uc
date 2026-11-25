@@ -4,7 +4,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node tests/phase2.test.js"
+    "test": "node tests/phase2.test.js && node tests/phase3.static.test.js",
+    "test:phase3": "node tests/phase3.e2e.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

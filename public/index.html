@@ -99,6 +99,15 @@
     .session-heading { display: flex; justify-content: space-between; gap: .75rem; align-items: flex-start; }
     .inline-form { display: grid; grid-template-columns: 90px minmax(0, 1fr) auto; gap: .5rem; align-items: end; margin-top: .8rem; }
     .inline-form .field { margin: 0; }
+    .full-tag { background: #fff1f0; color: var(--red); }
+    .load-line { font-weight: 700; }
+    .load-line.is-full { color: var(--red); }
+    .remark-form { display: grid; gap: .5rem; margin-top: .8rem; }
+    .remark-form .field { margin: 0; }
+    .audit-table, .report-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    .audit-table th, .audit-table td, .report-table th, .report-table td { padding: .4rem .5rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    .audit-table th, .report-table th { color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; }
+    .report-wrap { overflow-x: auto; }
     .empty-state { padding: 1.25rem; border: 1px dashed #cbd5e1; border-radius: .7rem; color: var(--muted); text-align: center; }
     footer { padding: 1rem; color: var(--muted); font-size: .8rem; text-align: center; }
     @media (max-width: 720px) {
@@ -295,6 +304,7 @@
                 <option value="">Choose a tutor from the list</option>
               </select>
             </div>
+            <p id="bookingLoad" class="helper load-line" aria-live="polite"></p>
             <div class="fields" style="margin-top:.85rem">
               <div class="field wide">
                 <label for="bookingTopic">What would you like help with?</label>
@@ -330,6 +340,20 @@
             <button id="closeDetailButton" class="button secondary small" type="button">Close</button>
           </div>
           <div id="detailBody"></div>
+        </section>
+
+        <section id="reportsSection" class="card full">
+          <h3>Reports</h3>
+          <div class="layout">
+            <div>
+              <h4 id="mineTitle" style="margin:0 0 .5rem">My sessions by subject</h4>
+              <div id="reportMine" class="report-wrap"></div>
+            </div>
+            <div>
+              <h4 style="margin:0 0 .5rem">Subject demand</h4>
+              <div id="reportDemand" class="report-wrap"></div>
+            </div>
+          </div>
         </section>
 
         <section class="card full">
@@ -368,12 +392,12 @@
       </div>
     </section>
   </main>
-  <footer>TutorLink UC · DBSYS32 Phase 2</footer>
+  <footer>TutorLink UC · DBSYS32 Phase 3</footer>
 
   <script>
     // sessions = every session of the user (counts, pending queue, button lookups);
     // visibleSessions = the filtered list shown under "My sessions".
-    const state = { user: null, subjects: [], tutors: [], sessions: [], visibleSessions: [], profile: null, editingId: null };
+    const state = { user: null, subjects: [], tutors: [], sessions: [], visibleSessions: [], profile: null, editingId: null, remarkFor: null, dashboard: null };
     const notice = document.getElementById('apiNotice');
     const tutorFields = document.getElementById('tutorFields');
     const bookingForm = document.getElementById('bookingForm');
@@ -395,6 +419,7 @@
         credentials: 'same-origin',
         ...options,
         headers: {
+          'X-Requested-With': 'tutorlink',
           ...(options.body ? { 'Content-Type': 'application/json' } : {}),
           ...options.headers,
         },
@@ -494,6 +519,7 @@
           ${rating}
           <div class="chips">${subjectButtons}</div>
           ${tutor.bio ? `<p>${escapeHtml(tutor.bio)}</p>` : ''}
+          <p class="helper load-line${tutor.is_full ? ' is-full' : ''}">Today: ${escapeHtml(tutor.day_load)} / ${escapeHtml(tutor.max_daily_sessions)} sessions ${tutor.is_full ? '<span class="tag full-tag">FULL</span>' : ''}</p>
           <p class="helper">Up to ${escapeHtml(pluralSessions(tutor.max_daily_sessions))} per day · Click a subject to request a session</p>
         </article>`;
       }).join('');
@@ -504,8 +530,24 @@
       return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString();
     }
 
+    const remarkLabels = {
+      Accepted: ['Remark for the learner (optional)', 'Confirm accept', 'success', false],
+      Declined: ['Remark for the learner (optional)', 'Confirm decline', 'secondary', false],
+      Cancelled: ['Reason for cancelling (required)', 'Confirm cancel', 'danger', true],
+    };
+
     function sessionActions(session) {
       const id = Number(session.session_id);
+      if (state.remarkFor && state.remarkFor.id === id) {
+        const [label, buttonText, buttonKind, required] = remarkLabels[state.remarkFor.status];
+        return `<form class="remark-form" data-id="${id}" data-status="${escapeHtml(state.remarkFor.status)}">
+          <div class="field"><label>${escapeHtml(label)}</label><input name="remarks" maxlength="500" ${required ? 'required' : ''}></div>
+          <div class="button-row" style="margin-top:0">
+            <button class="button ${buttonKind} small" type="submit">${escapeHtml(buttonText)}</button>
+            <button class="button secondary small" type="button" data-action="remark-back" data-id="${id}">Back</button>
+          </div>
+        </form>`;
+      }
       const actions = [];
       if (state.user.role === 'learner' && session.status === 'Pending') {
         actions.push(`<button class="button secondary small" data-action="edit" data-id="${id}">Edit request</button>`);
@@ -525,8 +567,20 @@
     }
 
     function displayDateTime(value) {
-      const date = new Date(value);
+      const date = new Date(String(value ?? '').replace(' ', 'T'));
       return Number.isNaN(date.getTime()) ? String(value ?? '') : date.toLocaleString();
+    }
+
+    function renderAuditTrail(audit) {
+      if (!audit.length) return '<p class="muted">No status changes were recorded for this session.</p>';
+      return `<div class="report-wrap"><table class="audit-table">
+        <thead><tr><th>When</th><th>Change</th><th>By</th><th>Remarks</th></tr></thead>
+        <tbody>${audit.map((row) => `<tr>
+          <td>${escapeHtml(displayDateTime(row.changed_at))}</td>
+          <td>${row.old_status ? `${escapeHtml(row.old_status)} → ${escapeHtml(row.new_status)}` : `Requested (${escapeHtml(row.new_status)})`}</td>
+          <td>${escapeHtml(row.changed_by_role)}</td>
+          <td>${escapeHtml(row.remarks || '')}</td>
+        </tr>`).join('')}</tbody></table></div>`;
     }
 
     async function showDetails(sessionId) {
@@ -553,8 +607,9 @@
         </div>
         <dl class="detail-grid">
           ${rows.map(([label, value]) => `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`).join('')}
-          <dt>Status history</dt><dd class="muted">The audit trail of every status change is added in Phase 3.</dd>
-        </dl>`;
+        </dl>
+        <h4 style="margin:1.1rem 0 .5rem">Status history</h4>
+        ${renderAuditTrail(session.audit || [])}`;
       const panel = document.getElementById('detailSection');
       panel.classList.remove('hidden');
       panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -588,6 +643,8 @@
           </div>
           <p><strong>${escapeHtml(session.topic)}</strong></p>
           <p>${escapeHtml(displayDate(session.session_date))} · ${escapeHtml(String(session.start_time).slice(0, 5))}–${escapeHtml(String(session.end_time).slice(0, 5))} · ${escapeHtml(session.venue)}</p>
+          ${state.user.role === 'tutor' && session.status === 'Pending'
+            ? `<p class="load-line">Your appointments that day: ${escapeHtml(session.day_load)} / ${escapeHtml(session.max_daily_sessions)}</p>` : ''}
           ${rating}${reviewForm}${sessionActions(session)}
         </article>`;
       }).join('');
@@ -621,7 +678,9 @@
       const cards = state.user.role === 'tutor'
         ? [
             ['Pending requests', count((s) => s.status === 'Pending')],
-            ["Today's appointments", count((s) => isActive(s) && dateKey(s) === today)],
+            ["Today's appointments", state.dashboard
+              ? `${state.dashboard.today_count} / ${state.dashboard.max_daily_sessions}`
+              : count((s) => isActive(s) && dateKey(s) === today)],
             ['Accepted sessions', count((s) => s.status === 'Accepted')],
             ['Completed', count((s) => s.status === 'Completed')],
           ]
@@ -662,8 +721,44 @@
       // and sort are applied in SQL by the server for the list below them.
       state.sessions = await api('/api/sessions');
       state.visibleSessions = await api(`/api/sessions?${sessionFilterParams().toString()}`);
+      state.dashboard = state.user?.role === 'tutor' ? await api('/api/tutor/dashboard') : null;
       renderSessions();
       renderSummary();
+      loadReports().catch((error) => showNotice(error.message, 'error'));
+    }
+
+    function renderReportTable(rows, columns, emptyText) {
+      if (!rows.length) return `<div class="empty-state">${escapeHtml(emptyText)}</div>`;
+      return `<table class="report-table">
+        <thead><tr>${columns.map(([label]) => `<th>${escapeHtml(label)}</th>`).join('')}</tr></thead>
+        <tbody>${rows.map((row) => `<tr>${columns.map(([, read]) => `<td>${escapeHtml(read(row))}</td>`).join('')}</tr>`).join('')}</tbody>
+      </table>`;
+    }
+
+    async function loadReports() {
+      const [mine, demand] = await Promise.all([
+        api('/api/reports/my-summary'),
+        api('/api/reports/subject-demand'),
+      ]);
+      const rating = (value) => (value === null ? '—' : Number(value).toFixed(1));
+      document.getElementById('mineTitle').textContent = state.user.role === 'tutor'
+        ? 'Sessions I tutored, by subject'
+        : 'Sessions I booked, by subject';
+      document.getElementById('reportMine').innerHTML = renderReportTable(mine, [
+        ['Subject', (r) => r.subject_code],
+        ['Total', (r) => r.total_sessions],
+        ['Completed', (r) => r.completed_sessions],
+        ['Declined / cancelled', (r) => r.not_held],
+        ['Avg rating', (r) => rating(r.avg_rating)],
+        ['All-tutor avg', (r) => rating(r.overall_avg_rating)],
+      ], 'No sessions yet.');
+      document.getElementById('reportDemand').innerHTML = renderReportTable(demand, [
+        ['Subject', (r) => r.subject_code],
+        ['Tutors', (r) => r.tutors],
+        ['Sessions', (r) => r.total_sessions],
+        ['Completed', (r) => r.completed_sessions],
+        ['Avg rating', (r) => rating(r.avg_rating)],
+      ], 'No subjects yet.');
     }
 
     // Tutor profile (FR-03): bio, daily limit, add and remove subjects.
@@ -705,6 +800,8 @@
         document.getElementById('filterTo').value = '';
         document.getElementById('filterSort').value = 'date_desc';
         state.visibleSessions = [];
+        state.remarkFor = null;
+        state.dashboard = null;
         return;
       }
       const isLearner = user.role === 'learner';
@@ -734,6 +831,26 @@
       return local.toISOString().slice(0, 10);
     }
 
+    async function updateBookingLoad() {
+      const line = document.getElementById('bookingLoad');
+      const [tutorId] = (document.getElementById('tutorChoice').value || '').split(':');
+      const date = document.getElementById('bookingDate').value;
+      line.classList.remove('is-full');
+      if (state.editingId || !tutorId || !date) {
+        line.textContent = '';
+        return;
+      }
+      try {
+        const load = await api(`/api/tutors/${encodeURIComponent(tutorId)}/load?date=${encodeURIComponent(date)}`);
+        line.textContent = load.full
+          ? `FULL: the tutor already has ${load.appointment_count} / ${load.max_daily_sessions} sessions on this date.`
+          : `Tutor's load on this date: ${load.appointment_count} / ${load.max_daily_sessions} sessions.`;
+        line.classList.toggle('is-full', load.full);
+      } catch (error) {
+        line.textContent = '';
+      }
+    }
+
     function startEditing(session) {
       state.editingId = Number(session.session_id);
       document.getElementById('bookingTitle').textContent = 'Edit pending request';
@@ -746,6 +863,7 @@
       document.getElementById('bookingSubmit').textContent = 'Save changes';
       document.getElementById('cancelEditButton').classList.remove('hidden');
       document.getElementById('bookingSection').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      updateBookingLoad();
     }
 
     function stopEditing() {
@@ -755,6 +873,7 @@
       document.getElementById('bookingTutorField').classList.remove('hidden');
       document.getElementById('bookingSubmit').textContent = 'Send request';
       document.getElementById('cancelEditButton').classList.add('hidden');
+      updateBookingLoad();
     }
 
     document.getElementById('registerRole').addEventListener('change', updateRoleFields);
@@ -822,6 +941,7 @@
       const button = event.target.closest('[data-book-tutor]');
       if (!button) return;
       document.getElementById('tutorChoice').value = `${button.dataset.bookTutor}:${button.dataset.bookSubject}`;
+      updateBookingLoad();
       document.getElementById('bookingSection').scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
 
@@ -849,12 +969,15 @@
         stopEditing();
         showNotice(result.message, 'success');
         await loadSessions();
+        if (state.user.role === 'learner') await loadTutors();
       } catch (error) {
         showNotice(error.message, 'error');
       }
     });
 
     document.getElementById('cancelEditButton').addEventListener('click', stopEditing);
+    document.getElementById('tutorChoice').addEventListener('change', updateBookingLoad);
+    document.getElementById('bookingDate').addEventListener('change', updateBookingLoad);
     document.getElementById('bookingDate').min = localDateInput(new Date());
 
     // The same handlers serve "All my sessions" and, for tutors, "Pending requests".
@@ -876,13 +999,32 @@
         }
         return;
       }
+      if (button.dataset.action === 'remark-back') {
+        state.remarkFor = null;
+        renderSessions();
+        return;
+      }
       const status = { accept: 'Accepted', decline: 'Declined', complete: 'Completed', cancel: 'Cancelled' }[button.dataset.action];
       if (!status) return;
+      clearNotice();
+      if (status !== 'Completed') {
+        // Accept, decline and cancel ask for a remark or reason first (FR-07, FR-09).
+        state.remarkFor = { id: Number(button.dataset.id), status };
+        renderSessions();
+        return;
+      }
+      await submitStatusChange(button.dataset.id, status, '');
+    }
+
+    // The status change runs sp_update_session_status on the server; a rule that
+    // fails comes back as a message and the session stays unchanged.
+    async function submitStatusChange(id, status, remarks) {
       try {
-        const result = await api(`/api/sessions/${button.dataset.id}/status`, {
+        const result = await api(`/api/sessions/${id}/status`, {
           method: 'PATCH',
-          body: JSON.stringify({ status }),
+          body: JSON.stringify({ status, remarks }),
         });
+        state.remarkFor = null;
         showNotice(result.message, 'success');
         await loadSessions();
       } catch (error) {
@@ -891,6 +1033,12 @@
     }
 
     async function handleSessionSubmit(event) {
+      if (event.target.matches('.remark-form')) {
+        event.preventDefault();
+        const remarks = new FormData(event.target).get('remarks') || '';
+        await submitStatusChange(event.target.dataset.id, event.target.dataset.status, String(remarks));
+        return;
+      }
       if (!event.target.matches('.rating-form')) return;
       event.preventDefault();
       const values = Object.fromEntries(new FormData(event.target).entries());

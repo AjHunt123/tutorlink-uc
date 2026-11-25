@@ -12,4 +12,14 @@ const pool = mysql.createPool({
   dateStrings: true,
 });
 
+// Every connection uses the campus time zone, so NOW() and CURDATE() inside the
+// stored procedures, the function and the triggers match the times users enter.
+const dbTimeZone = process.env.DB_TIMEZONE || '+08:00';
+if (!/^[+-]\d{2}:\d{2}$/.test(dbTimeZone)) {
+  throw new Error('DB_TIMEZONE must look like +08:00');
+}
+pool.pool.on('connection', (connection) => {
+  connection.query('SET time_zone = ?', [dbTimeZone]);
+});
+
 module.exports = pool;

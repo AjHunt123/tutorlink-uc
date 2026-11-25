@@ -107,3 +107,27 @@ WHERE NOT EXISTS (
     AND x.session_date = d.session_date
     AND x.start_time = d.start_time
 );
+-- -----------------------------------------------------------------------------
+-- Audit history for the sample sessions (Phase 3). The sample rows were inserted
+-- directly, so the triggers did not write their history; this adds one row for
+-- the request and one for the current status. Safe to run again.
+-- -----------------------------------------------------------------------------
+INSERT INTO SessionAudit (session_id, old_status, new_status, changed_by_role, changed_at, remarks)
+SELECT s.session_id, NULL, 'Pending', 'learner', s.requested_at, 'Session requested (sample data)'
+  FROM TutoringSession s
+ WHERE NOT EXISTS (SELECT 1 FROM SessionAudit a WHERE a.session_id = s.session_id);
+
+INSERT INTO SessionAudit (session_id, old_status, new_status, changed_by_role, changed_at, remarks)
+SELECT s.session_id, 'Pending', s.status,
+       CASE WHEN s.status = 'Cancelled' THEN 'learner' ELSE 'tutor' END,
+       COALESCE(s.completed_at, s.requested_at),
+       CASE s.status
+         WHEN 'Accepted'  THEN 'Accepted (sample data)'
+         WHEN 'Declined'  THEN 'Declined (sample data)'
+         WHEN 'Completed' THEN 'Completed (sample data)'
+         ELSE 'Cancelled (sample data)'
+       END
+  FROM TutoringSession s
+ WHERE s.status <> 'Pending'
+   AND NOT EXISTS (SELECT 1 FROM SessionAudit a
+                    WHERE a.session_id = s.session_id AND a.old_status IS NOT NULL);
